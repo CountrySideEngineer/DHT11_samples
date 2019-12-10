@@ -112,13 +112,7 @@ int CGpio::Read(const unsigned int pin, unsigned int* level) {
 
 	assert(NULL != level);
 
-	timespec startTime = { 0 };
-	timespec curTime = { 0 };
-
-	clock_gettime(CLOCK_MONOTONIC_RAW, &startTime);
 	int readLevel = gpioRead(pin);
-	clock_gettime(CLOCK_MONOTONIC_RAW, &curTime);
-	printf("passedTime = %lu\n", (curTime.tv_nsec - startTime.tv_nsec));
 	if (PI_BAD_GPIO == readLevel) {
 		CLog::Warn("GPIO pin invalid.");
 	} else {
