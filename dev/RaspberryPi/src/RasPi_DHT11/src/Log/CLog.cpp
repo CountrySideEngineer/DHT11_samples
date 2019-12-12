@@ -14,14 +14,8 @@ const char* CLog::INFO_WARN_TAG =  "WARN ";
 const char* CLog::INFO_ERROR_TAG = "ERROR";
 const char* CLog::INFO_FATAL_TAG = "FATAL";
 
-CLog::CLog() {
-	// TODO 自動生成されたコンストラクター・スタブ
-
-}
-
-CLog::~CLog() {
-	// TODO Auto-generated destructor stub
-}
+CLog::CLog() {}
+CLog::~CLog() {}
 
 void CLog::Trace(const char* message) { CLog::WriteMessage(INFO_TRACE_TAG, message); }
 #ifdef __DEBUG

@@ -64,7 +64,7 @@ int CGpio::SetPullUpDownMode(
 		const unsigned int pin,
 		const unsigned int mode)
 {
-	int result = gpioSetMode(pin, mode);
+	int result = gpioSetPullUpDown(pin, mode);
 	if (PI_BAD_GPIO == result) {
 		CLog::Warn("GPIO pin invalid.");
 	} else  if (PI_BAD_PUD == result) {
@@ -147,24 +147,47 @@ int CGpio::Sleep(const int sec, const int microSec) {
 
 /**
  * @brief	Wait for the time specified by argument microSec.
- * @param	microSec	Time to wait in micro second.
+ * @param	nanoSec	Time to wait in micro second.
  * @return	Returns actually wait time.
  */
-uint32_t CGpio::Delay(const uint32_t microSec) {
+uint32_t CGpio::DelayMicro(const uint32_t micorSec) {
 	timespec startTime = { 0 };
 	clock_gettime(CLOCK_REALTIME, &startTime);
 
 	uint32_t passedTime = 0;
-	uint32_t timeToWait = microSec * 1000;
-	while (passedTime < timeToWait) {
+	while (passedTime < micorSec) {
 		timespec curTime = { 0 };
+		uint32_t timeSpan = 0;
+
 		clock_gettime(CLOCK_REALTIME, &curTime);
 
 		if (curTime.tv_nsec < startTime.tv_nsec) {
-			passedTime = curTime.tv_nsec + ((1000 * 1000 * 1000) - startTime.tv_nsec);
+			timeSpan = (curTime.tv_nsec + ((1000 * 1000 * 1000) - startTime.tv_nsec));
 		} else {
-			passedTime = curTime.tv_nsec - startTime.tv_nsec;
+			timeSpan = curTime.tv_nsec - startTime.tv_nsec;
 		}
+		passedTime = (timeSpan / 1000);
+	}
+	return passedTime;
+}
+
+#define	MICRO_SEC_PER_MILLI_SEC			(1000)
+/**
+ * @brief	Wait for the time specified by argument milliSec
+ * @param	nanoSec	Time to wait in milli second.
+ * @return	Returns actually wait time.
+ */
+uint32_t CGpio::DelayMilli(const uint32_t milliSec) {
+
+	uint32_t passedTime = 0;
+	while (passedTime < milliSec) {
+		uint32_t waitTime = this->DelayMicro(MICRO_SEC_PER_MILLI_SEC);
+		/*
+		 * Method "DelayMicro()" return wait time specified micro sec.
+		 * It is needed to convert micro into milli sec dividing by 1000.
+		 */
+		passedTime += (waitTime / 1000);
+		passedTime += (this->DelayMicro(MICRO_SEC_PER_MILLI_SEC) / 1000);
 	}
 	return passedTime;
 }

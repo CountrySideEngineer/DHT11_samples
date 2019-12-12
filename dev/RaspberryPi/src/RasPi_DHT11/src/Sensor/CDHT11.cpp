@@ -61,6 +61,8 @@ int CDHT11::setupGpioPin(const uint8_t pin, const int mode) {
 	return setupResult;
 }
 
+#define	DHT11_ARDUINO_SIGNAL	(2)
+
 /**
  * @brief	Read sensor value.
  * @return	Returns 0 if reading sensor value finished succeeded, otherwise
@@ -76,9 +78,7 @@ int CDHT11::read() {
 	if (CDHT11_ERROR_OK != sequenceResult) {
 		CLog::Error("Reading sensor failed.");
 	} else {
-		printf("T = %d.%d\n",
-				this->getTemperature() / 10,
-				this->getTemperature() % 10);
+		//Nothing to do.
 	}
 	this->updateInterval();
 
@@ -93,10 +93,10 @@ int CDHT11::read() {
  */
 //#define	DHT11_START_SIGNAL_LOW_TIME_MILLISEC				(18)
 //A little bit longer than the value in data sheet...
-#define	DHT11_START_SIGNAL_LOW_TIME_MILLISEC				(18)
-#define	DHT11_START_SIGNAL_HIGH_TIME_MILLISEC				(20)
+#define	DHT11_START_SIGNAL_LOW_TIME_MILLISEC				(20)
+#define	DHT11_START_SIGNAL_HIGH_TIME_MILLISEC				(80)
 #define	MILLI2MICRO_SEC(milli_sec)							((milli_sec) * 1000)
-#define	DHT11_SENSOR_READY_TO_OUTPUT_SIGNAL_TIME_MILLSEC	(80)
+#define	DHT11_SENSOR_READY_TO_OUTPUT_SIGNAL_TIME_MICROSEC	(80)
 
 #define	DHT11_DATA_START_LOW_BIT_WAIT_TIME					(50)
 #define	DHT11_DATA_FOLLOW_HIGH_BIT_WAIT_TIME				(70)
@@ -110,17 +110,21 @@ int CDHT11::read() {
 int CDHT11::readSequence() {
 
 	CGpio* gpio = CGpio::getInstance();
+	uint32_t cycleBuff[80] = { 0 };
 
 	//Sending start signal.
 	//Step1:Seding start signals.
-	gpio->SetPullUpDownMode(this->m_pin, CGpio::CGPIO_PULL_UP_DOWN_UP);
 	gpio->SetMode(this->m_pin, CGpio::CGPIO_PIN_IN_OUT_OUTPUT);
+	gpio->SetPullUpDownMode(this->m_pin, CGpio::CGPIO_PULL_UP_DOWN_OFF);
 	gpio->Write(this->m_pin, CGpio::CGPIO_PIN_LEVEL_LOW);
-	gpio->Delay(MILLI2MICRO_SEC(DHT11_START_SIGNAL_LOW_TIME_MILLISEC));
+	gpio->DelayMilli(DHT11_START_SIGNAL_LOW_TIME_MILLISEC);
 
 	//Step2:Waiting for response signal by setting GPIO pin pulled up.
 	gpio->SetMode(this->m_pin, CGpio::CGPIO_PIN_IN_OUT_INPUT);
 	gpio->SetPullUpDownMode(this->m_pin, CGpio::CGPIO_PULL_UP_DOWN_UP);
+
+	this->waitForPulse(CGpio::CGPIO_PIN_LEVEL_LOW,
+			MILLI2MICRO_SEC(DHT11_START_SIGNAL_HIGH_TIME_MILLISEC));
 	if (WAIT_SIGNAL_TIMEOUT == this->waitForPulse(
 			CGpio::CGPIO_PIN_LEVEL_HIGH,
 			DHT11_START_SIGNAL_HIGH_TIME_MILLISEC))
@@ -133,33 +137,41 @@ int CDHT11::readSequence() {
 	 * Step3:Waiting for response signal sensor send to notify host,
 	 * raspberry-pi, to ready to output data.
 	 */
-	if (WAIT_SIGNAL_TIMEOUT == this->waitForPulse(
+	uint32_t startSignalWaitTime_Low = this->waitForPulse(
 			CGpio::CGPIO_PIN_LEVEL_LOW,
-			DHT11_SENSOR_READY_TO_OUTPUT_SIGNAL_TIME_MILLSEC))
+			DHT11_SENSOR_READY_TO_OUTPUT_SIGNAL_TIME_MICROSEC);
+	if (WAIT_SIGNAL_TIMEOUT == startSignalWaitTime_Low)
 	{
 		CLog::Warn("Response to start signal of low can not be detected.");
 		return CDHT11_ERROR_SENSOR_PULL_LOW_TIMEOUT;
 	}
-	if (WAIT_SIGNAL_TIMEOUT == this->waitForPulse(
+	uint32_t startSignalWaitTime_high = this->waitForPulse(
 			CGpio::CGPIO_PIN_LEVEL_HIGH,
-			DHT11_SENSOR_READY_TO_OUTPUT_SIGNAL_TIME_MILLSEC))
+			DHT11_SENSOR_READY_TO_OUTPUT_SIGNAL_TIME_MICROSEC);
+	if (WAIT_SIGNAL_TIMEOUT == startSignalWaitTime_high)
 	{
 		CLog::Warn("Response to start signal of high can not be detected.");
 		return CDHT11_ERROR_SENSOR_PULL_HIGH_TIMEOUT;
 	}
 
 	//Step4:Read signal sensor sends.
-	uint32_t cycleBuff[80] = { 0 };
-	for (int index = 0; index < 80; index += 2) {
-		cycleBuff[index] = this->waitForPulse(
+	for (int buffIndex = 0; buffIndex < 40; buffIndex++) {
+		cycleBuff[buffIndex * 2] = this->waitForPulse(
 				(const unsigned int)CGpio::CGPIO_PIN_LEVEL_LOW,
 				(const unsigned int)DHT11_DATA_START_LOW_BIT_WAIT_TIME);
-		cycleBuff[index + 1] = this->waitForPulse(
+		cycleBuff[(buffIndex * 2) + 1] = this->waitForPulse(
 				(const unsigned int)CGpio::CGPIO_PIN_LEVEL_HIGH,
 				(const unsigned int)DHT11_DATA_FOLLOW_HIGH_BIT_WAIT_TIME);
 	}
+//	for (int buffIndex = 0; buffIndex < 40; buffIndex++) {
+//		printf("cycleBuff[%2d] = %7d, cycleBuff[%2d] = %7d\n",
+//				buffIndex * 2,
+//				cycleBuff[buffIndex * 2],
+//				(buffIndex * 2) + 1,
+//				cycleBuff[(buffIndex * 2) + 1]);
+//	}
 
-	//Step
+	//Step5:Convert Low-High time to bit data.
 	this->InitDataBuff();
 	for (int index = 0; index < 40; index++) {
 		uint32_t startBit = cycleBuff[index * 2];
@@ -171,11 +183,12 @@ int CDHT11::readSequence() {
 			return CDHT11_ERROR_SENSOR_READ_DATA_TIMEOUT;;
 		}
 
-		this->m_dataBuff[index / 8] <<= 1;	//
+		this->m_dataBuff[index / 8] <<= 1;
 		if (startBit < followBit) {
 			this->m_dataBuff[index / 8] |= 1;
 		}
 	}
+//	this->ShowBuff();
 
 	if (false == this->validateCheckSum()) {
 		CLog::Error("Receive data invalid.");
@@ -205,15 +218,14 @@ uint32_t CDHT11::waitForPulse(
 
 	uint32_t passedTime = 0;
 	while (level == readLevel) {
-		if ((time * 1000) < passedTime) {
+		if ((time) < passedTime) {
 			//Time out!
 			return CDHT11::WAIT_SIGNAL_TIMEOUT;
 		}
-		passedTime += instance->Delay(1);
 		instance->Read(this->m_pin, &readLevel);
-		passedTime++;
+		passedTime += instance->DelayMicro(1);
 	}
-	CLog::Debug("Wait for sensor start signal : OK");
+	//CLog::Debug("Wait for sensor start signal : OK");
 	return passedTime;
 }
 
@@ -266,7 +278,7 @@ bool CDHT11::validateCheckSum() {
 }
 
 /**
- * Returns temperature read from sensors.
+ * Returns temperature read from sensor.
  *
  * @return	Temperature.
  */
@@ -278,5 +290,17 @@ int32_t CDHT11::getTemperature() {
 		temperature *= (-1);
 	}
 	return temperature;
-
 }
+
+/**
+ * Returns temperature read from sensor.
+ *
+ * @return	Humidity
+ */
+int32_t CDHT11::getHumidity() {
+	int32_t humidity = (int32_t)
+			(((this->m_dataBuff[CDHT11_DATA_BUFF_INDEX_RH_HIGH] & 0x7F) << 8) +
+			  (this->m_dataBuff[CDHT11_DATA_BUFF_INDEX_RH_LOW]));
+	return humidity;
+}
+

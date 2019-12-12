@@ -29,7 +29,7 @@ public:
 	virtual ~CDHT11();
 
 	uint8_t getPin() const { return m_pin; }
-	int32_t getHumidity() const { return m_humidity; }
+	int32_t getHumidity();
 	int32_t getTemperature();
 
 	int setupGpioPin(const uint8_t pin, const int mode = 0);
@@ -44,7 +44,7 @@ protected:
 	virtual void updateInterval();
 	virtual bool validateCheckSum();
 	virtual void InitDataBuff();
-
+	virtual void ShowBuff();
 
 protected:
 	static const uint32_t	WAIT_SIGNAL_TIMEOUT;
@@ -75,9 +75,19 @@ protected:
  * @brief	Initialize buffer used to store received data via
  */
 inline void CDHT11::InitDataBuff() {
-	for (int index = 0; index < CDHT11_DATA_BUFF_SIZE; index++) {
-		this->m_dataBuff[index] = 0;
+	for (int buffIndex = 0; buffIndex < CDHT11_DATA_BUFF_SIZE; buffIndex++) {
+		this->m_dataBuff[buffIndex] = 0;
 	}
+}
+
+inline void CDHT11::ShowBuff() {
+	for (int buffIndex = 0; buffIndex < CDHT11_DATA_BUFF_SIZE; buffIndex++) {
+		if ((0 != buffIndex) && (0 == (buffIndex % 16))) {
+			printf("\n");
+		}
+		printf("0x%02X, ", this->m_dataBuff[buffIndex]);
+	}
+	printf("\n");
 }
 
 #endif /* SENSOR_CDHT11_H_ */

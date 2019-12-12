@@ -60,7 +60,8 @@ public:
 	int	Read(const unsigned int pin, unsigned int* level);
 
 	int	Sleep(const int sec, const int microSec);
-	uint32_t	Delay(const uint32_t microSec);
+	uint32_t	DelayMicro(const uint32_t microSec);
+	uint32_t	DelayMilli(const uint32_t milliSec);
 
 	uint32_t	GetCurrentTime();
 
