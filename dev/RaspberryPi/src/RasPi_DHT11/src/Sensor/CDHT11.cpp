@@ -113,7 +113,7 @@ int CDHT11::readSequence() {
 	uint32_t cycleBuff[80] = { 0 };
 
 	//Sending start signal.
-	//Step1:Seding start signals.
+	//Step1:Sending start signals.
 	gpio->SetMode(this->m_pin, CGpio::CGPIO_PIN_IN_OUT_OUTPUT);
 	gpio->SetPullUpDownMode(this->m_pin, CGpio::CGPIO_PULL_UP_DOWN_OFF);
 	gpio->Write(this->m_pin, CGpio::CGPIO_PIN_LEVEL_LOW);

@@ -2,7 +2,7 @@
  * CLog.cpp
  *
  *  Created on: 2019/12/06
- *      Author: KENSUKE
+ *      Author: CountrySideEngineer.
  */
 
 #include "CLog.h"
